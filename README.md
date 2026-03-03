@@ -1,35 +1,22 @@
-# Auto-Todo: Requirement → Executable Task List
+# Auto-Todo Skill
 
-## What is this?
+Intelligent task decomposition skill for [Claude Code](https://claude.com/claude-code). Convert requirement documents into auto-dev compatible `todolist.md` files through structured decomposition, dependency analysis, and phase grouping.
 
-Auto-Todo is a Claude Code skill that converts requirement documents into **auto-dev compatible `todolist.md`** files through intelligent task decomposition. It reads structured requirements (SG→CD→FR hierarchy or any markdown), applies merge/split/pass-through rules, organizes tasks by dependency and phase, and outputs a ready-to-execute task list.
+## Install
 
-**Core principle:** Parse requirements → Decompose into right-sized tasks → Organize by dependency → Review with user → Generate todolist.md.
-
-### Pipeline Positioning
-
-Auto-Todo is the **middle step** in a three-stage development pipeline:
-
-```
-auto-requirement → auto-todo → auto-dev
-(产品决策层)         (工程任务层)   (代码实现层)
+```bash
+npx skills add GRNfromDARK/auto-todo-skill
 ```
 
-- **auto-requirement**: Product decisions — Why, What, Priorities, and Scope
-- **auto-todo**: Engineering decomposition — How to break down, order, and group tasks
-- **auto-dev**: Code implementation — TDD pipeline with gated development
+Or install globally:
 
-### Decision Boundary
+```bash
+npx skills add GRNfromDARK/auto-todo-skill -g
+```
 
-| Layer | Owner | Examples |
-|-------|-------|---------|
-| **Macro Architecture** | auto-requirement | "Use microservices", "PostgreSQL", "frontend-backend separation" |
-| **Engineering Details** | **auto-todo** | "Need DB migration task", "Split frontend/backend phases", "API routes by module" |
-| **Code Implementation** | auto-dev | Function design, variable naming, algorithm selection |
+## Usage
 
-## Quick Start
-
-Trigger with any of these keywords in Claude Code:
+Trigger in Claude Code with any of these keywords:
 
 ```
 autotodo: my-project
@@ -41,265 +28,62 @@ auto-todo
 - `autotodo: path/to/req.md` → uses the specified file directly
 - `auto-todo` (no args) → scans for the latest requirement document
 
-## Installation
-
-### Via npx (Recommended)
-
-```bash
-npx skills add GRNfromDARK/auto-todo-skill
-```
-
-### Manual
-
-Place the `auto-todo/` folder in either location:
-
-```bash
-# Project-level (current project only)
-.claude/skills/auto-todo/
-
-# User-level (all projects)
-~/.claude/skills/auto-todo/
-```
-
-Claude Code will automatically discover and load the skill.
-
-## Key Features
-
-### 1. Multi-Format Input Support
-
-Three-tier parsing strategy:
-
-| Tier | Input Format | Strategy |
-|------|-------------|----------|
-| **Tier 1** | auto-requirement output (SG/CD/FR IDs) | Full structured parse |
-| **Tier 2** | Structured markdown (headings + lists) | Heuristic parse with confirmation |
-| **Tier 3** | Free-form markdown | LLM comprehension with `[INFERRED]` tags |
-
-### 2. Intelligent Task Decomposition
-
-Each FR is classified using a granularity decision tree:
-
-| AC Count | Depth Artifacts? | Same-CD Small FRs? | Action |
-|----------|-----------------|---------------------|--------|
-| ≤2 | No | Yes | **MERGE** — combine related small FRs |
-| ≤2 | No | No | **PASS-THROUGH** — 1 FR → 1 task |
-| 3-5 | No | — | **PASS-THROUGH** |
-| 3-5 | Yes | — | **SPLIT** by artifact boundary |
-| >5 | No | — | **SPLIT** by AC groups |
-| >5 | Yes | — | **SPLIT** by concern |
-
-Target: each task ≈ 1 auto-dev Card (2-8 hours work).
-
-### 3. Dependency-Aware Organization
-
-- Extracts `depends_on` from requirement document
-- Rewrites FR-level deps to task-level after merge/split operations
-- Detects circular dependencies
-- Topological sort with priority weighting (Must > Should > Could)
-- Identifies critical path and parallelizable tasks
-
-### 4. Phase Grouping
-
-- Assigns tasks to logical phases (3-7 tasks per phase)
-- Groups by CD domain, architecture layer, or dependency cluster
-- Descriptive phase names (not "Phase 1" or "Miscellaneous")
-
-### 5. Quick Review Gate
-
-Three-level progressive disclosure:
-
-- **Level 1 (Summary):** Phase names, task counts, critical path, complexity distribution — <15 lines
-- **Level 2 (Phase Details):** Task list per phase with dependencies
-- **Level 3 (Task Details):** Full task card with ACs and traceability
-
-User actions: Accept / View Details / Modify / Regenerate / Reset
-
-### 6. S/M/L Complexity Scoring
-
-```
-score = AC_count × 1.0 + depth_artifacts × 3.0 + dependency_fan_out × 0.5
-S: score < 3  |  M: score 3-7  |  L: score > 7
-```
-
-### 7. Traceability Matrix
-
-Every generated todolist.md includes a traceability matrix mapping FR → Task(s), flagging uncovered requirements, and showing coverage percentage. Target: **100% coverage of Must + Should FRs**.
-
-### 8. File Write Safety
-
-- Automatic backup of existing `todolist.md` (timestamped `.bak`)
-- Atomic write via temp file → rename
-- User confirmation before overwrite
-
-## Output Format
-
-```markdown
-# [Project] — 执行任务清单
-
-> Generated: 2026-03-03 14:30 by auto-todo
-> Source: `docs/requirements/2026-03-03-project-requirement.md`
-> Tech Stack: Node.js 20, React 19, Vitest | Tasks: 15 | Phases: 4
-
----
-
-## Phase A: Foundation
-
-### A-1: Setup database schema [M]
-- **Traces to:** FR-001, FR-002
-- **Depends on:** none
-- **Description:** Create initial database schema...
-- **Acceptance Criteria:**
-  - [ ] AC-1: Schema migration runs successfully
-  - [ ] AC-2: All tables created with correct types
-
----
-
-## Traceability Matrix
-
-| FR | Task(s) | Status |
-|----|---------|--------|
-| FR-001 | A-1 | ✅ Covered |
-| FR-002 | A-1, A-2 | ✅ Covered |
-
-Coverage: 100% (12/12 Must+Should FRs covered)
-```
-
-## 7-Phase Workflow
-
-```
- ┌───────────────────────────┐
- │  1. Validate Input         │  Find and validate requirement doc
- └───────────┬───────────────┘
-             ▼
- ┌───────────────────────────┐
- │  2. Parse Requirement      │  Tier 1/2/3 parsing, missing info handling
- └───────────┬───────────────┘
-             ▼
- ┌───────────────────────────┐
- │  3. Project Context        │  Tech stack detection, engineering decisions
- └───────────┬───────────────┘
-             ▼
- ┌───────────────────────────┐
- │  4. Task Decomposition     │  Merge / Split / Pass-through + S/M/L scoring
- └───────────┬───────────────┘
-             ▼
- ┌───────────────────────────┐
- │  5. Task Organization      │  Dependencies, topological sort, phase grouping
- └───────────┬───────────────┘
-             ▼
- ┌───────────────────────────┐     ┌──────────────────────┐
- │  6. Review & Approval      │─NO─▶│ Modify / Regenerate  │
- │     (HARD GATE)            │     │ → Back to 4          │
- └───────────┬───────────────┘     └──────────────────────┘
-             │ YES
-             ▼
- ┌───────────────────────────┐
- │  7. Generate & Write       │  Backup → Atomic write → Traceability matrix
- └───────────┬───────────────┘
-             ▼
-          Done → Next: `autodev: project-name`
-```
-
-## File Structure
-
-```
-auto-todo/
-├── README.md                         ← This file
-├── SKILL.md                          ← Skill definition (loaded by Claude Code)
-└── references/
-    ├── decision-rules.md             ← Granularity classifier, dependency rewrite,
-    │                                    complexity scoring, confidence signals
-    └── todolist-template.md          ← Output format template for auto-dev
-```
-
-## Hard Gate
-
-**Enforced constraint:** The skill will **NOT** write todolist.md until the user has reviewed and approved the task breakdown summary. No shortcutting the review gate.
-
-## Large Document Support
-
-| Document Size | Strategy |
-|--------------|----------|
-| <10 FRs | Single-pass processing |
-| 10-30 FRs | Phased loading (parse → decompose → output) |
-| >30 FRs | Sub-Agent dispatch per CD domain, merge results |
-
-## Tips
-
-1. **Use with auto-requirement output for best results** — Tier 1 parsing extracts full hierarchy with zero ambiguity
-2. **Any structured markdown works** — You don't need auto-requirement; headings + bullet lists are enough
-3. **Review the summary carefully** — 30 seconds of review catches most issues
-4. **Use "modify" for fine-tuning** — Natural language commands like "merge T-03 and T-04" or "split T-05 into frontend and backend"
-5. **Check the traceability matrix** — Any `[UNCOVERED]` FR is a gap in your task list
-6. **Feed the output to auto-dev** — Run `autodev: project-name` to generate the full TDD pipeline
-
----
-
-# Auto-Todo：需求 → 可执行任务清单
-
-## 这是什么？
-
-Auto-Todo 是一个 Claude Code skill，通过智能任务分解将需求文档转化为 **auto-dev 兼容的 `todolist.md`** 文件。它读取结构化需求（SG→CD→FR 层级或任意 markdown），应用合并/拆分/直通规则，按依赖关系和阶段组织任务，输出可直接执行的任务清单。
-
-### 流水线定位
-
-Auto-Todo 是三阶段开发流水线的**中间环节**：
+## Pipeline Positioning
 
 ```
 auto-requirement → auto-todo → auto-dev
 (产品决策层)         (工程任务层)   (代码实现层)
 ```
 
-- **auto-requirement**：产品决策 — 为什么做、做什么、优先级和取舍
-- **auto-todo**：工程分解 — 怎么拆、怎么排、怎么分组
-- **auto-dev**：代码实现 — TDD 门控开发流水线
+This skill handles **engineering decomposition** — converting product decisions into executable task lists. Macro architecture and code implementation are handled by upstream/downstream skills.
 
-## 快速开始
+| Layer | Owner | Examples |
+|-------|-------|---------|
+| Macro Architecture | auto-requirement | "Use microservices", "PostgreSQL", "frontend-backend separation" |
+| Engineering Details | **auto-todo** | "Need DB migration task", "Split frontend/backend phases", "API routes by module" |
+| Code Implementation | auto-dev | Function design, variable naming, algorithm selection |
 
-在 Claude Code 中使用以下关键词触发：
+## Key Features
+
+- **Multi-format input** — Three-tier parsing: auto-requirement output (Tier 1), structured markdown (Tier 2), free-form markdown (Tier 3)
+- **Intelligent decomposition** — Merge/split/pass-through rules based on AC count, depth artifacts, and domain grouping; target: each task ≈ 1 auto-dev Card (2-8 hours)
+- **Dependency-aware organization** — Topological sort, circular dependency detection, critical path identification
+- **Phase grouping** — 3-7 tasks per phase, grouped by capability domain or architecture layer
+- **Quick review gate** — Three-level progressive disclosure with HARD GATE before file write
+- **S/M/L complexity scoring** — Heuristic scoring: `AC_count × 1.0 + depth_artifacts × 3.0 + dep_fan_out × 0.5`
+- **Traceability matrix** — FR → Task mapping with 100% Must+Should coverage target
+- **File write safety** — Automatic backup, atomic write, overwrite confirmation
+
+## How It Works
 
 ```
-autotodo: my-project          → 自动发现 docs/requirements/ 下的需求文档
-autotodo: path/to/req.md      → 使用指定文件
-auto-todo                     → 扫描最新需求文档
+Validate input → Parse requirement → Detect project context → Decompose tasks
+    → Organize by dependency → Review & approve (HARD GATE) → Generate todolist.md
 ```
 
-## 安装
+## Output
 
-### 通过 npx（推荐）
+Auto-dev compatible `todolist.md` with:
 
-```bash
-npx skills add GRNfromDARK/auto-todo-skill
-```
+1. Header with source doc, tech stack, task/phase counts
+2. Phase-grouped tasks with S/M/L complexity tags
+3. Per-task traces, dependencies, acceptance criteria
+4. Traceability matrix with FR coverage percentage
 
-### 手动安装
+## Changelog
 
-将 `auto-todo/` 文件夹放到以下任一位置：
+### v1.1 (2026-03-03)
 
-```bash
-# 项目级
-.claude/skills/auto-todo/
+- Fixed 3 auto-dev compatibility issues in output format (test command section, constraint section, spec doc reference)
 
-# 用户级
-~/.claude/skills/auto-todo/
-```
+### v1.0 (2026-03-03)
 
-## 核心特性
+- Initial release with 7-phase workflow, three-tier parsing, intelligent decomposition, dependency-aware organization, and traceability matrix
 
-1. **多格式输入支持** — 三级解析策略（auto-requirement 标准输出 / 结构化 markdown / 自由格式）
-2. **智能任务分解** — 合并小 FR、拆分大 FR、直通适中 FR，粒度对齐 auto-dev Card
-3. **依赖感知排序** — 拓扑排序、循环检测、关键路径识别、并行任务标注
-4. **阶段分组** — 3-7 个任务一组，按能力域/架构层/依赖聚类分组
-5. **快速审查门** — 三级渐进披露，30 秒快速确认路径
-6. **S/M/L 复杂度评分** — 基于 AC 数量、深度制品、依赖扇出的启发式评分
-7. **可追溯性矩阵** — FR → Task 映射，100% Must+Should 覆盖目标
-8. **文件写入安全** — 自动备份、原子写入、覆盖确认
+## Documentation
 
-## 使用技巧
+See [skills/auto-todo/README.md](skills/auto-todo/README.md) for detailed documentation.
 
-1. **配合 auto-requirement 输出效果最佳** — Tier 1 解析零歧义
-2. **任意结构化 markdown 也能用** — 不强制使用 auto-requirement
-3. **认真查看审查摘要** — 30 秒审查就能发现大部分问题
-4. **用 "modify" 微调** — 支持自然语言修改："合并 T-03 和 T-04"、"把 T-05 拆成前端和后端"
-5. **检查可追溯性矩阵** — 任何 `[UNCOVERED]` 的 FR 都是任务缺口
-6. **输出直接喂给 auto-dev** — 运行 `autodev: project-name` 生成完整 TDD 流水线
+## License
+
+MIT
