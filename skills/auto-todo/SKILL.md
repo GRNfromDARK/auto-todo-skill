@@ -84,9 +84,10 @@ Detect input format tier and parse accordingly:
 
 Use Glob/Read to detect project context:
 
-1. **Tech stack detection** — scan for `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc. Extract language, framework, test runner.
-2. **Show detection receipt** — brief summary for user to confirm/correct. If nothing detected, ask or skip.
-3. **Engineering decisions** — based on requirement NFRs + project context:
+1. **Tech stack detection** — scan for `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc. Extract language, framework, **test runner and test command**.
+2. **Resolve test command** — this is CRITICAL for auto-dev. Detect from project config (e.g., `npm test`, `pytest tests/ -q`, `go test ./...`). If undetectable, ask user. The test command populates the `## 测试命令` section in output.
+3. **Show detection receipt** — brief summary for user to confirm/correct. If nothing detected, ask or skip.
+4. **Engineering decisions** — based on requirement NFRs + project context:
    - Requirement says "前后端分离" → create Frontend/Backend phase split
    - Database FRs detected → add DB schema/migration task
    - Test framework found → include test commands in tasks
@@ -191,31 +192,54 @@ Before writing:
 
 Generate `todolist.md` following the template in `references/todolist-template.md`.
 
+**CRITICAL: The output must include these 3 sections that auto-dev depends on:**
+
+1. **`## 设计文档`** — table with spec doc path(s). auto-dev uses this as `{SPEC_PATH}` for Card generation.
+2. **`## 测试命令`** — detected test command in a code block. auto-dev uses this as `{TEST_CMD}` in autodev.sh.
+3. **`## 约束`** — extracted from requirement NFRs. auto-dev writes these into system_prompt.md.
+
 Key structure:
 ```markdown
 # [Project] — 执行任务清单
 
-> Generated: [timestamp] | Source: [requirement doc path]
+> 唯一需求来源：`[requirement doc path]`
+> Generated: [timestamp] by auto-todo
 > Tech Stack: [detected stack] | Tasks: [N] | Phases: [M]
 
 ---
 
-## Phase A: [Phase Name]
+## 设计文档
 
-### A-1: [Task Title] [S/M/L]
-- **Traces to:** FR-xxx, FR-yyy
-- **Depends on:** none | A-2, B-1
-- **Description:** [what to implement]
-- **Acceptance Criteria:**
-  - [ ] AC-1: [criterion]
-  - [ ] AC-2: [criterion]
+| 文件 | 路径 | 用途 |
+|------|------|------|
+| 需求文档 | `[requirement doc path]` | 产品需求与验收标准的唯一来源 |
 
-### A-2: [Next Task] [S/M/L]
-...
+## 测试命令
+
+​```bash
+[detected test command, e.g., pytest tests/ -q]
+​```
+
+## 约束
+
+- [Constraint from NFR, e.g., 向后兼容现有 API]
+- [Constraint 2]
 
 ---
 
-## Traceability Matrix
+## Phase A：[Phase Name]
+
+### A-1：[Task Title]
+- [任务描述]
+- 依赖：none
+- 来源：FR-xxx, FR-yyy
+- 验证：
+  - [ ] [验收标准 1]
+  - [ ] [验收标准 2]
+
+---
+
+## 可追溯性矩阵
 
 | FR | Task(s) | Status |
 |----|---------|--------|

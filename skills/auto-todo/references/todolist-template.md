@@ -1,6 +1,6 @@
 # Todolist.md Output Template
 
-This is the reference template for auto-todo's output. The generated todolist.md must be compatible with auto-dev's LLM-based parsing.
+This is the reference template for auto-todo's output. The generated todolist.md must be **directly consumable by auto-dev** — auto-dev reads this file to map Groups→Phases and Tasks→Cards.
 
 ---
 
@@ -9,54 +9,69 @@ This is the reference template for auto-todo's output. The generated todolist.md
 ```markdown
 # {PROJECT_NAME} — 执行任务清单
 
+> 唯一需求来源：`{requirement_doc_relative_path}`
 > Generated: {YYYY-MM-DD HH:MM} by auto-todo
-> Source: `{requirement_doc_relative_path}`
-> Tech Stack: {detected_tech_stack_or_"not detected"}
-> Tasks: {total_task_count} | Phases: {phase_count} | Critical Path: {critical_path_length} tasks
+> Tech Stack: {detected_tech_stack} | Tasks: {total_task_count} | Phases: {phase_count}
 
 ---
 
-## Key Constraints
+## 设计文档
 
-{Extract from requirement doc's NFRs and constraints. These become system_prompt constraints in auto-dev.}
-
-- {Constraint 1}
-- {Constraint 2}
-
----
-
-## Phase A: {Phase Name}
-
-### A-1: {Task Title} [{S|M|L}]
-- **Traces to:** {FR-xxx, FR-yyy}
-- **Depends on:** {none | task IDs like A-2, B-1}
-- **Confidence:** {High|Medium|Low}
-- **Description:**
-  {Clear description of what to implement. Include enough context for auto-dev to generate a Card.}
-- **Acceptance Criteria:**
-  - [ ] {Given X, when Y, then Z}
-  - [ ] {Given A, when B, then C}
-- **Notes:** {Optional: engineering decisions, [INFERRED] tags, warnings}
-
-### A-2: {Task Title} [{S|M|L}]
-- **Traces to:** {FR-xxx}
-- **Depends on:** A-1
-- **Confidence:** High
-- **Description:**
-  {Description}
-- **Acceptance Criteria:**
-  - [ ] {criterion}
+| 文件 | 路径 | 用途 |
+|------|------|------|
+| 需求文档 | `{requirement_doc_relative_path}` | 产品需求与验收标准的唯一来源 |
+| {其他相关文档} | `{path}` | {用途说明} |
 
 ---
 
-## Phase B: {Phase Name}
+## 测试命令
 
-### B-1: {Task Title} [{S|M|L}]
+```bash
+{detected_test_command}
+```
+
+{如未检测到测试框架，写明：}
+> ⚠️ 未检测到测试框架，请在使用 auto-dev 前手动指定测试命令。
+
+---
+
+## 约束
+
+{从需求文档 NFR 和架构约束中提取，auto-dev 将这些写入 system_prompt。}
+
+- {约束 1，如：向后兼容现有 API}
+- {约束 2，如：所有接口需有错误处理}
+
+---
+
+## Phase A：{Phase Name}
+
+### A-1：{Task Title}
+- {任务描述：清晰说明要实现什么，包含足够上下文让 auto-dev 生成 Card}
+- {实现细节或技术要点}
+- 依赖：{none | A-2, B-1}
+- 来源：{FR-xxx, FR-yyy}
+- 验证：
+  - [ ] {验收标准 1}
+  - [ ] {验收标准 2}
+
+### A-2：{Task Title}
+- {任务描述}
+- 依赖：A-1
+- 来源：{FR-xxx}
+- 验证：
+  - [ ] {验收标准}
+
+---
+
+## Phase B：{Phase Name}
+
+### B-1：{Task Title}
 ...
 
 ---
 
-## Traceability Matrix
+## 可追溯性矩阵
 
 | FR ID | FR Title | Task(s) | Priority | Status |
 |-------|----------|---------|----------|--------|
@@ -69,33 +84,41 @@ This is the reference template for auto-todo's output. The generated todolist.md
 
 ---
 
-## Processing Summary
+## 处理摘要
 
-- **Input format:** {Tier 1: auto-requirement | Tier 2: structured markdown | Tier 3: free-form}
-- **FRs parsed:** {count}
-- **Tasks generated:** {count} (Pass-through: {n}, Merged: {n}, Split: {n})
-- **Inferred items:** {count} ({list of [INFERRED] categories})
-- **Engineering decisions:** {count}
+- **输入格式:** {Tier 1: auto-requirement | Tier 2: structured markdown | Tier 3: free-form}
+- **FR 数:** {count}
+- **任务数:** {count} (直通: {n}, 合并: {n}, 拆分: {n})
+- **推断项:** {count} ({list of [INFERRED] categories})
+- **工程决策:** {count}
 ```
 
 ---
 
 ## Format Rules
 
-1. **Phase IDs**: Use letters: Phase A, Phase B, Phase C...
-2. **Task IDs**: `{Phase Letter}-{Sequence Number}` — e.g., A-1, A-2, B-1
-3. **Complexity tags**: Always in square brackets after title: `[S]`, `[M]`, `[L]`
-4. **Traces to**: Always present — links back to source FR(s)
-5. **Depends on**: Always present — use `none` if no dependencies
-6. **Acceptance Criteria**: Use checkbox format `- [ ]` for auto-dev compatibility
-7. **Metadata header**: Always include Generated, Source, Tech Stack, counts
-8. **Traceability matrix**: Always appended at end
-9. **Key Constraints section**: Extract from requirement NFRs — auto-dev uses these for system_prompt
+1. **Phase IDs**: Use letters with Chinese colon: `## Phase A：`, `## Phase B：`
+2. **Task IDs**: `### {Phase Letter}-{Sequence}：{Title}` — e.g., `### A-1：创建数据模型`
+3. **Task body**: Bullet list description (not bold key-value metadata). Keep it flat and readable — auto-dev maps each `###` task to a Card
+4. **Dependencies**: Inline as `- 依赖：{task IDs}` (not bold `**Depends on:**`)
+5. **Traceability**: Inline as `- 来源：{FR IDs}` (not bold `**Traces to:**`)
+6. **Acceptance Criteria**: Under `- 验证：` with `- [ ]` checkbox sublists
+7. **测试命令 section**: REQUIRED — auto-dev uses this as the test verification command for every Card
+8. **设计文档 section**: REQUIRED — auto-dev uses this path as "single source of truth" for Card generation
+9. **约束 section**: REQUIRED — auto-dev extracts these into system_prompt constraints
+10. **可追溯性矩阵**: Always appended at end
 
-## Compatibility Notes
+## auto-dev Compatibility Notes
 
-- auto-dev uses LLM to parse this file, so format is **convention** not strict schema
-- Keep structure consistent but don't obsess over exact whitespace
-- Phase names must be human-readable (auto-dev displays them in pipeline output)
-- Task descriptions should be detailed enough for auto-dev to generate a complete Card
-- Include file paths, API endpoints, or data structures when known from requirements
+The output format is designed to match auto-dev's expected input:
+
+| auto-todo output | auto-dev reads as |
+|-----------------|-------------------|
+| `## Phase A：Name` | Group → Phase A |
+| `### A-1：Title` | Task → Card A.1 |
+| `- 依赖：B-1` | Card ordering dependency |
+| `- 验证：` + `- [ ]` items | Card acceptance criteria |
+| `## 测试命令` | `{TEST_CMD}` in autodev.sh |
+| `## 设计文档` | `{SPEC_PATH}` in system_prompt.md |
+| `## 约束` | system_prompt.md constraints section |
+| `> 唯一需求来源：` | `{TODOLIST_PATH}` reference |
