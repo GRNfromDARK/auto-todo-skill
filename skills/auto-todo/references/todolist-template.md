@@ -1,6 +1,6 @@
 # Todolist.md Output Template
 
-This is the reference template for auto-todo's output. The generated todolist.md must be **directly consumable by auto-dev** — auto-dev reads this file to map Groups→Phases and Tasks→Cards.
+The generated todolist.md must be **directly consumable by auto-dev**. auto-dev maps `## Phase` → Groups and `### Task` → Cards.
 
 ---
 
@@ -19,8 +19,7 @@ This is the reference template for auto-todo's output. The generated todolist.md
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
-| 需求文档 | `{requirement_doc_relative_path}` | 产品需求与验收标准的唯一来源 |
-| {其他相关文档} | `{path}` | {用途说明} |
+| 需求文档 | `{requirement_doc_path}` | 产品需求与验收标准的唯一来源 |
 
 ---
 
@@ -30,17 +29,14 @@ This is the reference template for auto-todo's output. The generated todolist.md
 {detected_test_command}
 ```
 
-{如未检测到测试框架，写明：}
-> ⚠️ 未检测到测试框架，请在使用 auto-dev 前手动指定测试命令。
+> ⚠️ 如未检测到测试框架，写明：未检测到测试框架，请在使用 auto-dev 前手动指定测试命令。
 
 ---
 
 ## 约束
 
-{从需求文档 NFR 和架构约束中提取，auto-dev 将这些写入 system_prompt。}
-
-- {约束 1，如：向后兼容现有 API}
-- {约束 2，如：所有接口需有错误处理}
+- {约束 1，从需求 NFR 提取}
+- {约束 2}
 
 ---
 
@@ -48,7 +44,6 @@ This is the reference template for auto-todo's output. The generated todolist.md
 
 ### A-1：{Task Title}
 - {任务描述：清晰说明要实现什么，包含足够上下文让 auto-dev 生成 Card}
-- {实现细节或技术要点}
 - 依赖：{none | A-2, B-1}
 - 来源：{FR-xxx, FR-yyy}
 - 验证：
@@ -77,19 +72,18 @@ This is the reference template for auto-todo's output. The generated todolist.md
 |-------|----------|---------|----------|--------|
 | FR-001 | {title} | A-1 | Must | ✅ Covered |
 | FR-002 | {title} | A-2, A-3 | Must | ✅ Covered |
-| FR-003 | {title} | B-1 | Should | ✅ Covered |
-| FR-004 | {title} | — | Should | ⚠️ UNCOVERED |
+| FR-003 | {title} | — | Should | ⚠️ UNCOVERED |
 
-**Coverage:** {X}% ({covered_count}/{total_must_should_count} Must+Should FRs covered)
+**Coverage:** {X}% ({covered}/{total} Must+Should FRs covered)
 
 ---
 
 ## 处理摘要
 
-- **输入格式:** {Tier 1: auto-requirement | Tier 2: structured markdown | Tier 3: free-form}
+- **输入格式:** {Tier 1/2/3}
 - **FR 数:** {count}
 - **任务数:** {count} (直通: {n}, 合并: {n}, 拆分: {n})
-- **推断项:** {count} ({list of [INFERRED] categories})
+- **推断项:** {count}
 - **工程决策:** {count}
 ```
 
@@ -97,28 +91,24 @@ This is the reference template for auto-todo's output. The generated todolist.md
 
 ## Format Rules
 
-1. **Phase IDs**: Use letters with Chinese colon: `## Phase A：`, `## Phase B：`
-2. **Task IDs**: `### {Phase Letter}-{Sequence}：{Title}` — e.g., `### A-1：创建数据模型`
-3. **Task body**: Bullet list description (not bold key-value metadata). Keep it flat and readable — auto-dev maps each `###` task to a Card
-4. **Dependencies**: Inline as `- 依赖：{task IDs}` (not bold `**Depends on:**`)
-5. **Traceability**: Inline as `- 来源：{FR IDs}` (not bold `**Traces to:**`)
-6. **Acceptance Criteria**: Under `- 验证：` with `- [ ]` checkbox sublists
-7. **测试命令 section**: REQUIRED — auto-dev uses this as the test verification command for every Card
-8. **设计文档 section**: REQUIRED — auto-dev uses this path as "single source of truth" for Card generation
-9. **约束 section**: REQUIRED — auto-dev extracts these into system_prompt constraints
-10. **可追溯性矩阵**: Always appended at end
+1. **Phase IDs**: Letters with Chinese colon — `## Phase A：`, `## Phase B：`
+2. **Task IDs**: `### {Letter}-{Number}：{Title}` — e.g., `### A-1：创建数据模型`
+3. **Task body**: Bullet list. Keep flat and readable — auto-dev maps each `###` to a Card
+4. **Dependencies**: `- 依赖：{task IDs}`
+5. **Traceability**: `- 来源：{FR IDs}`
+6. **Acceptance criteria**: Under `- 验证：` with `- [ ]` checkbox sublists
+7. **Three required sections**: `设计文档`, `测试命令`, `约束` — auto-dev depends on these
+8. **可追溯性矩阵**: Always at the end
 
-## auto-dev Compatibility Notes
-
-The output format is designed to match auto-dev's expected input:
+## auto-dev Compatibility Map
 
 | auto-todo output | auto-dev reads as |
 |-----------------|-------------------|
 | `## Phase A：Name` | Group → Phase A |
 | `### A-1：Title` | Task → Card A.1 |
 | `- 依赖：B-1` | Card ordering dependency |
-| `- 验证：` + `- [ ]` items | Card acceptance criteria |
+| `- 验证：` + `- [ ]` | Card acceptance criteria |
 | `## 测试命令` | `{TEST_CMD}` in autodev.sh |
 | `## 设计文档` | `{SPEC_PATH}` in system_prompt.md |
-| `## 约束` | system_prompt.md constraints section |
+| `## 约束` | system_prompt.md constraints |
 | `> 唯一需求来源：` | `{TODOLIST_PATH}` reference |
