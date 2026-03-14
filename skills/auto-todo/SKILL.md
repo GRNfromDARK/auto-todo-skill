@@ -138,7 +138,14 @@ If the project directory is empty or contains no code, note `[GREENFIELD PROJECT
 #### 3c. Engineering decisions
 
 Based on requirement NFRs + project context + existing codebase:
-- "前后端分离" → create separate Frontend/Backend phases
+
+- **Frontend/Backend split detection:** If the requirement mentions "前后端分离", separate frontend framework (React/Vue/Angular), or any AC references UI components (editors, charts, forms, dashboards), produce a **Frontend AC Inventory** — a list of every AC that requires frontend work. Phase 4 must create tasks covering every item in this inventory, and Phase 5c must include at least one dedicated frontend phase. Example:
+  ```
+  🖥️ Frontend AC Inventory
+  AC-001: Monaco Editor 策略编写 → React 组件
+  AC-024: 净值曲线对比图 → Recharts 图表
+  AC-025: 回撤瀑布图 → Recharts 图表
+  ```
 - Database FRs + existing schema → extend/migrate tasks, not recreate
 - Tag decisions as `[DECISION: reason]`
 - Flag anything that contradicts existing code or the requirement doc
@@ -156,6 +163,8 @@ Each task should represent roughly one auto-dev Card (2-8 hours of work). Apply 
 - **Large features** (>5 ACs or complex artifacts like state machines) → **split** by concern boundary
 
 Every task must have a `traces_to` field linking back to source requirement(s).
+
+**AC-level coverage verification:** After decomposition, walk through every individual AC in the requirement and confirm it maps to at least one task. FR-level coverage is not enough — a single FR can have ACs spanning different domains (e.g., FR-001 may include both a backend API AC and a frontend editor AC). If an AC mentions a UI component, a specific protocol (WebSocket, gRPC), or a distinct subsystem, verify there is a task that explicitly implements it. If Phase 3c produced a Frontend AC Inventory, cross-check every item.
 
 **Complexity scoring:** Each task gets an S/M/L size estimate. See `references/decision-rules.md` for the formula.
 
@@ -200,13 +209,20 @@ Use `[DECISION: rationale]` for engineering choices. Use `[NEEDS CONFIRMATION]` 
 
 ### Phase 5: Organize tasks
 
-**5a. Dependencies** — Translate requirement-level dependencies to task-level. Glue tasks often become dependencies for multiple feature tasks. See `references/decision-rules.md` for the full impact matrix. Run cycle detection.
+**5a. Dependencies** — Translate requirement-level dependencies to task-level. Glue tasks often become dependencies for multiple feature tasks. See `references/decision-rules.md` for the full impact matrix. Run cycle detection. When a task-level dependency intentionally reverses a requirement-level `depends_on` (e.g., requirement says FR-004 depends on FR-003, but engineering-wise the data layer should be built before the engine), mark it with `[DECISION: reason for reversal]` so the change is transparent.
 
 **5b. Topological sort** — Order tasks by dependency graph. Break ties by priority (Must > Should > Could). Identify the critical path and parallelizable tasks.
 
-**5c. Phase grouping** — Group tasks into phases of 3-7 tasks each. Glue/foundation tasks typically go in Phase A. Prefer grouping by capability domain; fall back to architecture layers (Foundation → Core → Integration → Validation). No task may depend on a task in a later phase.
+**5c. Phase grouping** — Group tasks into phases of 3-7 tasks each. Glue/foundation tasks typically go in Phase A. Prefer grouping by capability domain; fall back to architecture layers (Foundation → Core → Integration → Validation). No task may depend on a task in a later phase. If Phase 3c detected a frontend/backend split, there must be at least one dedicated frontend phase — backend API tasks and frontend UI tasks should not be merged into the same phase.
 
 ### Phase 6: Present review summary
+
+**Before presenting the summary, run this self-check** to catch arithmetic and structural errors:
+
+1. **Count verification** — count every `###` task heading across all phases. Verify: (a) the total matches the stated number, (b) `requirement tasks + glue tasks = total`, (c) S + M + L counts also sum to total.
+2. **Critical path verification** — trace the actual dependency chain. For each step A → B, confirm B's `依赖` field includes A. The critical path is the longest chain in the dependency graph, not a guess.
+3. **Frontend coverage** — if Phase 3c produced a Frontend AC Inventory, verify every item has a corresponding task in a frontend phase. If not, the decomposition is incomplete — go back to Phase 4.
+4. **Dependency direction** — for every `depends_on` in the requirement, verify the task-level dependency is either preserved or explicitly marked `[DECISION]` for reversal.
 
 Show a concise summary for user approval. Keep it under 20 lines:
 
