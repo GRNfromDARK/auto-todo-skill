@@ -42,7 +42,7 @@ auto-requirement decides *what* to build. auto-dev decides *how* to code it. **a
 
 ### 1. Completeness — nothing from the requirement is lost
 
-Every feature, constraint, and non-functional requirement maps to at least one task. Enforced by a traceability matrix with 100% Must+Should FR coverage target.
+Every feature, constraint, and non-functional requirement maps to at least one task. Enforced at the **AC level** — each individual acceptance criterion is verified, not just the FR title. The traceability matrix targets 100% Must+Should FR coverage.
 
 ### 2. Glue Layer Completion — the most important capability
 
@@ -64,15 +64,30 @@ Requirements often describe *what* in business terms without specifying *how* at
 | "实时推送行情" | WebSocket `ws://host/market/stream`, message format, heartbeat |
 | "用户权限管理" | RBAC roles + permission matrix + JWT structure |
 
+## Quality Safeguards
+
 ### Codebase-Aware Decomposition
 
 For upgrade requirements, auto-todo scans existing code (models, routes, config, types) and extends what's already there rather than reinventing. Greenfield projects get full specs defined from scratch.
 
+### Frontend/Backend Split Detection
+
+When the requirement specifies frontend-backend separation (or any AC references UI components like editors, charts, forms), auto-todo produces a **Frontend AC Inventory** and guarantees a dedicated frontend phase in the task plan.
+
+### Phase 6 Self-Check
+
+Before presenting the review summary, auto-todo runs a 4-point self-check:
+
+1. **Count verification** — task count, req+glue breakdown, S/M/L sums all match
+2. **Critical path verification** — traced via actual dependency fields, not guessed
+3. **Frontend coverage** — every Frontend AC Inventory item has a task
+4. **Dependency direction** — requirement-level reversals marked with `[DECISION]`
+
 ## Key Features
 
 - **Multi-format input** — Three-tier parsing: auto-requirement output (Tier 1), structured markdown (Tier 2), free-form markdown (Tier 3)
-- **Existing codebase inventory** — Scans DB schema, API routes, config, types, and architecture patterns before generating tasks
-- **S/M/L complexity scoring** — Heuristic scoring per task
+- **AC-level coverage** — Individual acceptance criteria verified, not just FR-level
+- **Existing codebase inventory** — Scans DB schema, API routes, config, types, and architecture patterns
 - **Dependency-aware organization** — Topological sort, cycle detection, critical path identification
 - **Phase grouping** — 3-7 tasks per phase, grouped by capability domain
 - **Review gate** — User must approve task breakdown before file generation
@@ -82,8 +97,8 @@ For upgrade requirements, auto-todo scans existing code (models, routes, config,
 
 ```
 Find requirement → Parse document → Detect project context & codebase inventory
-    → Decompose tasks + Glue layer + Ambiguity resolution
-    → Organize by dependency → Review & approve → Generate todolist.md
+    → Decompose tasks + AC-level verification + Glue layer + Ambiguity resolution
+    → Organize by dependency → Self-check → Review & approve → Generate todolist.md
 ```
 
 ## Output
@@ -91,11 +106,20 @@ Find requirement → Parse document → Detect project context & codebase invent
 Auto-dev compatible `todolist.md` with:
 
 1. Header with source doc, tech stack, task/phase counts
-2. Phase-grouped tasks with complexity tags and detailed engineering descriptions
-3. Glue tasks marked as `[GLUE - 工程补全]`
-4. Traceability matrix with FR coverage percentage
+2. Three auto-dev sections: `设计文档`, `测试命令`, `约束`
+3. Phase-grouped tasks with detailed engineering descriptions
+4. Glue tasks marked as `[GLUE - 工程补全]`
+5. Traceability matrix with FR coverage percentage
+6. Self-check results (count, critical path, frontend coverage, dependency direction)
 
 ## Changelog
+
+### v2.1 (2026-03-14)
+
+- Added Frontend AC Inventory and dedicated frontend phase enforcement
+- Added AC-level coverage verification (not just FR-level)
+- Added Phase 6 self-check (count, critical path, frontend coverage, dependency direction)
+- Added dependency reversal `[DECISION]` tagging requirement
 
 ### v2.0 (2026-03-12)
 
