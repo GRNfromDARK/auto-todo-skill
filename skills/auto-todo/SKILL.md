@@ -1,307 +1,218 @@
 ---
 name: auto-todo
 description: >
-  Invoke for "autotodo", "auto-todo", "生成任务清单", "转成todolist", or any request to
-  convert/decompose a requirement document into a todolist.md. This is the bridge between
-  requirements and coding: it reads a requirement spec (markdown file) and outputs a phased,
-  dependency-ordered todolist.md ready for auto-dev. Trigger whenever the user has a requirement
-  doc and wants tasks extracted from it, asks "下一步" after auto-requirement, mentions breaking
-  down features into a task list, or references generating todolist.md from any spec file.
-  Do NOT trigger for writing requirements (use auto-requirement), running autodev pipelines,
-  general coding, or documentation.
+  Convert any requirement document, specification, brief, or accepted feature description into an
+  implementation-ready Markdown `todolist.md` with task checkboxes and nested verification checkboxes.
+  Trigger for "autotodo", "auto-todo", "生成任务清单", "转成 todolist", "拆成任务",
+  "checkbox todo", or requests for a phased dependency-aware execution checklist. This skill is
+  independent: it accepts requirements from any source and does not require or invoke another skill.
+  Do not use it to write the requirement itself or to implement the tasks.
 ---
 
-# Auto-Todo: Requirement → Executable Task List
+# Auto-Todo
 
-Transform requirement documents into **auto-dev compatible todolist.md** files. This is not just mechanical task decomposition — the core job is **engineering completion**: filling in the glue layers that requirements assume but never state, resolving ambiguous definitions into concrete specs, and ensuring nothing falls through the cracks.
+Turn a requirement source into a durable, reviewable `todolist.md`. The output must be complete enough
+for a human or coding agent to execute without losing scope, dependencies, verification, or important
+engineering glue.
 
-### Where this sits in the pipeline
+## Scope Boundary
 
+This skill owns:
+
+- extracting required behavior, constraints, and acceptance criteria from source material
+- inspecting the existing codebase when implementation context is available
+- decomposing requirements into dependency-aware, verification-bounded tasks
+- adding necessary integration, migration, test, observability, and lifecycle work
+- writing or revising a Markdown task list with checkboxes
+- validating requirement and acceptance-criterion coverage
+
+This skill does not:
+
+- create or redesign the product requirement unless the source is unusably ambiguous
+- implement code, run the implementation, commit, deploy, or publish
+- require a particular requirement format or upstream skill
+- generate provider-specific cards, prompts, shell runners, or model configuration
+
+## Checkbox Contract
+
+Every actionable task must start with a standard Markdown checkbox:
+
+```markdown
+- [ ] T-001: Task title
 ```
-auto-requirement  →  auto-todo  →  auto-dev
-(what to build)      (task plan)    (write code)
+
+Every independently verifiable condition under a task must also use a nested checkbox:
+
+```markdown
+  - Verification:
+    - [ ] The expected behavior is covered by an automated or explicit manual check.
 ```
 
-auto-requirement decides *what* to build. auto-dev decides *how* to code it. **auto-todo owns the engineering middle layer** — the gap between product thinking and implementation. Requirements describe features in isolation; real systems need plumbing between them. auto-todo's job is to surface that plumbing and make it explicit.
+Use only `[ ]` for open and `[x]` for completed. When revising an existing file, preserve completed
+`[x]` tasks and their user notes unless the user explicitly asks to reset them.
 
-## Three Core Capabilities
+## Operating Principles
 
-Every todolist.md must demonstrate these three qualities. They are the standard by which the output is judged.
-
-### 1. Completeness — nothing from the requirement is lost
-
-Every feature, constraint, and non-functional requirement must map to at least one task. The traceability matrix at the end enforces this. If a requirement is not covered, the todolist is broken.
-
-### 2. Glue Layer Completion — the most important capability
-
-Requirement documents describe individual features but **assume the connective tissue between them**. For example, a payment system requirement might list "payment processing" and "order management" as separate features, but never mention:
-
-- The shared database schema they both read/write
-- The event bus or message queue that connects payment status changes to order state
-- The authentication/authorization layer every endpoint needs
-- Error propagation paths between modules
-- Data format contracts between frontend and backend
-- Migration scripts for the database
-- Configuration management for external service credentials
-
-**auto-todo must identify and add these as explicit tasks.** Think top-down: what does the whole system need to function that no single feature requirement covers? These glue tasks often include:
-
-- **Data layer foundation** — shared schema design, migration scripts, connection pooling
-- **Integration plumbing** — event buses, message queues, API gateways, service discovery
-- **Cross-cutting concerns** — auth middleware, error handling framework, logging infrastructure
-- **Interface contracts** — API endpoint specs, data format definitions, protocol choices
-- **Build/deploy infrastructure** — CI/CD, environment config, containerization
-
-Mark glue tasks as `来源：[GLUE - 工程补全]` so they're distinguishable from requirement-derived tasks.
-
-### 3. Ambiguity Resolution — vague requirements become concrete definitions
-
-Requirements often describe *what* happens in business terms without specifying *how* at the engineering level. auto-todo must resolve these into concrete definitions in the task description. Examples:
-
-**For existing codebases (upgrade requirements)** — check what's already defined before inventing new specs:
-- If `src/api/v1/positions.py` already exists → task says "extend existing positions API with new field X"
-- If `src/models/order.py` defines an `Order` model → task says "add `timeout_at` field to existing `OrderModel`"
-
-**For greenfield projects** — define concrete specs from scratch:
-
-| Requirement says | Task must define |
-|-----------------|-----------------|
-| "通过 API 将数据传递给前端" | `GET /api/v1/positions` → `{symbol, qty, cost, pnl}`, pagination |
-| "实时推送行情数据" | WebSocket `ws://host/market/stream`, message format, heartbeat |
-| "用户权限管理" | RBAC roles + permission matrix + JWT structure |
-
-Use `[DECISION: rationale]` for engineering choices. Use `[NEEDS CONFIRMATION]` for high-stakes decisions.
+1. **Any requirement source is acceptable.** Structured IDs are helpful but not required. Assign local
+   source IDs when the input is free-form.
+2. **Inspect before inventing.** In an existing repository, reference current modules, schemas, routes,
+   tests, and conventions rather than planning duplicate replacements.
+3. **One task, one verifiable outcome.** Task size is determined by behavioral and verification
+   boundaries, not estimated human hours or a fixed number of files.
+4. **Preserve traceability.** Every task names its source requirement, and every required acceptance
+   criterion maps to at least one task verification checkbox.
+5. **Add only necessary glue.** Include integration and cross-cutting tasks required for the requested
+   system to work; do not add speculative infrastructure or unrelated improvements.
+6. **Make uncertainty visible.** Use explicit assumptions or blockers instead of silently inventing
+   high-impact contracts.
+7. **Protect secrets and user work.** Never read secret-bearing files, and never discard completed
+   checkboxes or unrelated edits in an existing task list.
 
 ## Workflow
 
-Execute these 7 phases in order. The user must approve the task breakdown before any file is written — this review gate exists because task structure directly shapes how auto-dev generates code, so getting it wrong wastes significant downstream effort.
+### 1. Resolve the Requirement Source
 
-### Phase 1: Find the requirement document
+- Use the path, content, ticket, or specification supplied by the user.
+- If the user names a project but no file, search likely documentation locations and select a unique
+  clear match.
+- If multiple materially different sources match, ask which one is authoritative.
+- If no written source exists but the user supplied a sufficiently clear accepted description, use that
+  text and label the source `USER-BRIEF`.
+- Reject missing or empty sources rather than fabricating a project.
 
-Resolve the input:
-- User provides a file path → use it directly
-- User provides a project name → scan `docs/requirements/` for matching `*-requirement.md`
-- Multiple matches → ask user to pick one
-- Nothing found → suggest running auto-requirement first
+Record all source paths or links at the top of the output.
 
-Validate: abort on missing/empty file. Warn (but continue) if file >100KB or non-.md extension.
+### 2. Parse Requirements Without Requiring a Format
 
-### Phase 2: Parse the requirement document
+Extract:
 
-Detect the input format and parse accordingly:
+- functional behavior and priorities
+- acceptance criteria and examples
+- non-functional constraints
+- business rules, states, calculations, and data lifecycle
+- explicit dependencies and external systems
+- assumptions, decisions, non-goals, and open questions
 
-| Format | How to detect | Parse strategy |
-|--------|--------------|----------------|
-| **auto-requirement output** | Has `SG-`, `CD-`, `FR-` IDs with hierarchy | Full structured parse — extract all nodes, priorities, dependencies |
-| **Structured markdown** | Has headings + lists, but no FR IDs | Heuristic parse — infer hierarchy from headings, assign synthetic IDs. Show parse receipt for user confirmation |
-| **Free-form markdown** | Minimal structure | LLM comprehension — extract requirements, mark all as `[INFERRED]`, require user confirmation |
+If stable IDs exist, preserve them. Otherwise assign `SRC-001`, `SRC-002`, and so on for traceability.
+Do not pretend inferred IDs were present in the source.
 
-**Filling gaps:** When information is missing (no priority, no acceptance criteria, no dependencies), infer reasonable defaults and tag them `[INFERRED]`. Batch all inferences for the review summary — don't interrupt the user with individual questions.
+### 3. Inspect Existing Implementation Context
 
-**Large documents:** <10 FRs → single pass. 10-30 FRs → phased processing. >30 FRs → dispatch sub-agents per capability domain and merge.
+When a repository is available, inspect relevant:
 
-### Phase 3: Detect project context and existing codebase
+- applicable `AGENTS.md` and repository documentation
+- manifests and test configuration
+- source modules, routes, interfaces, schemas, migrations, and config examples
+- current tests and established validation commands
+- architecture and naming patterns
 
-This phase has two jobs: understand the tech environment AND inventory what already exists. Many requirements are upgrades to existing systems — the todolist must build on what's there, not reinvent it.
+Never read `.env`, credentials, tokens, private keys, secret files, or unrelated personal data.
 
-**Security:** Never read `.env`, `credentials.*`, `*secret*`, or other sensitive files.
+Summarize only context that changes the task plan. Existing systems should be extended rather than
+recreated unless replacement is an explicit requirement.
 
-#### 3a. Tech stack detection
+### 4. Build a Coverage Ledger
 
-Read manifest files (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.) to detect language, framework, and test runner. Detect the test command — this populates `## 测试命令` for auto-dev.
+Before decomposition, create an internal ledger of:
 
-#### 3b. Existing codebase inventory (CRITICAL for upgrade requirements)
+- each source requirement
+- each acceptance criterion
+- each non-functional constraint
+- each explicit non-goal
+- each unresolved blocking decision
 
-Use Glob and Read to scan for existing definitions. The goal is to understand what's already built so the todolist extends rather than replaces:
+This ledger drives the final traceability table. Requirement-level coverage alone is insufficient when
+one requirement contains backend, frontend, migration, and operational acceptance criteria.
 
-1. **Database schema** — scan for `models/`, `migrations/`, `schema.py`, `*.sql`, ORM model files. If tables already exist, the task should say "extend the `orders` table with field X" not "create an `orders` table".
-2. **API endpoints** — scan for `routes/`, `controllers/`, `api/`, `openapi.json`, FastAPI/Express/Gin router files. If endpoints exist, reference them: "add `DELETE /api/v1/orders/{id}` alongside existing order endpoints".
-3. **Config structure** — scan for `config/`, `settings.py`, `.env.example`, YAML configs. If a config system exists, extend it rather than creating a new one.
-4. **Type definitions** — scan for `types/`, `models/`, `interfaces/`, `schemas/`, dataclass/Pydantic files. Reuse existing types in task descriptions.
-5. **Architecture patterns** — identify the existing patterns (event bus? service layer? repository pattern?). New tasks must follow established patterns.
-6. **Naming conventions** — observe file naming, variable naming, module structure. New code should match.
+### 5. Decompose Into Verification-Bounded Tasks
 
-**Show a brief inventory receipt:**
-```
-📂 Existing Codebase Inventory
-─────────────────────────────
-DB Schema: 12 tables found (orders, fills, positions... in src/models/)
-API Routes: 8 endpoints found (in src/api/v1/)
-Config: pydantic-settings based (src/config/settings.py)
-Types: Pydantic models (src/schemas/)
-Pattern: Event-driven + Repository pattern
-Test framework: pytest (tests/ directory, 47 existing tests)
-```
+Create a separate task when work has a distinct observable outcome or can fail independently. Keep work
+together when splitting would create artificial handoffs around one behavior.
 
-If the project directory is empty or contains no code, note `[GREENFIELD PROJECT]` and proceed — in this case, auto-todo defines everything from scratch.
+Each task must contain:
 
-#### 3c. Engineering decisions
+- unique `T-xxx` ID and action-oriented title
+- source requirement IDs
+- objective and behavioral boundary
+- likely scope or affected areas, when known
+- dependencies on other task IDs
+- expected deliverables
+- nested verification checkboxes
+- relevant constraints, assumptions, risks, or approval needs
 
-Based on requirement NFRs + project context + existing codebase:
+Do not use arbitrary 2-8 hour estimates, fixed phase sizes, or formulaic S/M/L scores. Mark risk as
+Low/Medium/High only when it helps execution ordering or review.
 
-- **Frontend/Backend split detection:** If the requirement mentions "前后端分离", separate frontend framework (React/Vue/Angular), or any AC references UI components (editors, charts, forms, dashboards), produce a **Frontend AC Inventory** — a list of every AC that requires frontend work. Phase 4 must create tasks covering every item in this inventory, and Phase 5c must include at least one dedicated frontend phase. Example:
-  ```
-  🖥️ Frontend AC Inventory
-  AC-001: Monaco Editor 策略编写 → React 组件
-  AC-024: 净值曲线对比图 → Recharts 图表
-  AC-025: 回撤瀑布图 → Recharts 图表
-  ```
-- Database FRs + existing schema → extend/migrate tasks, not recreate
-- Tag decisions as `[DECISION: reason]`
-- Flag anything that contradicts existing code or the requirement doc
+### 6. Add Necessary Engineering Glue
 
-### Phase 4: Task Decomposition + Glue Layer + Ambiguity Resolution
+After requirement-derived tasks are drafted, check whether the requested behavior also needs:
 
-This is the core phase. It has three sub-steps that must ALL happen:
+- shared data contracts or migrations
+- API, event, or frontend/backend integration
+- authentication and authorization integration
+- error propagation, retries, idempotency, or recovery
+- configuration and secret references without exposing values
+- logging, metrics, auditability, or operational readiness required by the source
+- test fixtures, compatibility checks, or migration verification
+- initialization, backfill, cleanup, or rollback steps
 
-#### 4a. Decompose features into tasks
+Add a glue task only when repository evidence or a source requirement makes it necessary. Mark its
+source as `[GLUE]` and explain what requirement paths it connects.
 
-Each task should represent roughly one auto-dev Card (2-8 hours of work). Apply the granularity classifier from `references/decision-rules.md`:
+### 7. Order Dependencies and Phases
 
-- **Small features** (≤2 acceptance criteria, same domain) → **merge** into one task
-- **Medium features** (3-5 ACs, no complex artifacts) → **pass through** as-is (1 FR = 1 task)
-- **Large features** (>5 ACs or complex artifacts like state machines) → **split** by concern boundary
+- Build a directed dependency graph using task IDs.
+- Reject or resolve cycles before writing the final file.
+- Order tasks topologically; use product priority and risk to break ties.
+- Group tasks into phases only when phases communicate meaningful execution boundaries.
+- Do not impose a fixed number of tasks per phase.
+- Mark tasks that can safely run in parallel, but never make one task depend on a later phase.
 
-Every task must have a `traces_to` field linking back to source requirement(s).
+### 8. Handle Decisions and Blockers
 
-**AC-level coverage verification:** After decomposition, walk through every individual AC in the requirement and confirm it maps to at least one task. FR-level coverage is not enough — a single FR can have ACs spanning different domains (e.g., FR-001 may include both a backend API AC and a frontend editor AC). If an AC mentions a UI component, a specific protocol (WebSocket, gRPC), or a distinct subsystem, verify there is a task that explicitly implements it. If Phase 3c produced a Frontend AC Inventory, cross-check every item.
-
-**Complexity scoring:** Each task gets an S/M/L size estimate. See `references/decision-rules.md` for the formula.
-
-#### 4b. Glue layer analysis (CRITICAL)
-
-After decomposing all FRs, step back and look at the system as a whole. Ask:
-
-1. **Data flow:** How does data move between features? Do they share a database? Do they need an event bus? Add data layer and integration tasks.
-2. **Common infrastructure:** What does every feature need but no feature explicitly requests? (auth, error handling, logging, config management) Add foundation tasks.
-3. **Interface contracts:** Where do features interact? Define the APIs, message formats, and protocols between them. Add interface definition tasks or specify contracts within existing tasks.
-4. **Deployment plumbing:** Does the system need database migrations, environment configs, CI/CD setup, containerization? Add infrastructure tasks.
-5. **Missing lifecycle steps:** Is there initialization/setup that must happen before features work? Teardown/cleanup? Seed data? Add lifecycle tasks.
-
-For each glue task, write a clear description of what it connects and why it's needed. Mark `来源：[GLUE - 工程补全]`.
-
-#### 4c. Resolve ambiguity in task descriptions
-
-Go through every task and check: is the description concrete enough for an engineer (or auto-dev) to implement without guessing?
-
-**Rule #1: Check existing code first.** Before defining any interface, schema, or config, consult the Phase 3 codebase inventory:
-
-- If the definition **already exists** → reference it: "扩展现有 `OrderModel`（`src/models/order.py`）增加 `timeout_at` 字段"
-- If a **pattern** exists → follow it: "参照现有 `UserAPI`（`src/api/v1/users.py`）路由模式，新增订单路由"
-- If **nothing exists** (greenfield or new domain) → define from scratch with full specs, tag `[GREENFIELD]`
-
-**Rule #2: Make vague requirements concrete** (after checking existing code):
-
-- Vague verbs like "处理"、"管理"、"支持" → replace with specific operations
-- "通过 API" → if endpoints exist, say which to extend; if not, define endpoint/method/schema
-- "数据存储" → if tables exist, say which to alter + migration; if not, define full schema
-- "通知用户" → specify channel, message format, trigger conditions
-- "权限控制" → if auth exists, extend it; if not, define auth model
-
-**Codebase-aware vs codebase-blind example:**
-
-| Scenario | BAD (codebase-blind) | GOOD (codebase-aware) |
-|----------|---------------------|----------------------|
-| 升级：新增订单超时 | "设计 orders 表: id, symbol..." | "在现有 `src/models/order.py` 的 `OrderModel` 增加 `timeout_at` 字段，新增 Alembic 迁移" |
-| 全新项目 | 同右 | "定义 orders 表 `[GREENFIELD]`: id UUID PK, symbol VARCHAR(32)..." |
-
-Use `[DECISION: rationale]` for engineering choices. Use `[NEEDS CONFIRMATION]` for high-stakes decisions you're not confident about.
-
-### Phase 5: Organize tasks
-
-**5a. Dependencies** — Translate requirement-level dependencies to task-level. Glue tasks often become dependencies for multiple feature tasks. See `references/decision-rules.md` for the full impact matrix. Run cycle detection. When a task-level dependency intentionally reverses a requirement-level `depends_on` (e.g., requirement says FR-004 depends on FR-003, but engineering-wise the data layer should be built before the engine), mark it with `[DECISION: reason for reversal]` so the change is transparent.
-
-**5b. Topological sort** — Order tasks by dependency graph. Break ties by priority (Must > Should > Could). Identify the critical path and parallelizable tasks.
-
-**5c. Phase grouping** — Group tasks into phases of 3-7 tasks each. Glue/foundation tasks typically go in Phase A. Prefer grouping by capability domain; fall back to architecture layers (Foundation → Core → Integration → Validation). No task may depend on a task in a later phase. If Phase 3c detected a frontend/backend split, there must be at least one dedicated frontend phase — backend API tasks and frontend UI tasks should not be merged into the same phase.
-
-### Phase 6: Present review summary
-
-**Before presenting the summary, run this self-check** to catch arithmetic and structural errors:
-
-1. **Count verification** — count every `###` task heading across all phases. Verify: (a) the total matches the stated number, (b) `requirement tasks + glue tasks = total`, (c) S + M + L counts also sum to total.
-2. **Critical path verification** — trace the actual dependency chain. For each step A → B, confirm B's `依赖` field includes A. The critical path is the longest chain in the dependency graph, not a guess.
-3. **Frontend coverage** — if Phase 3c produced a Frontend AC Inventory, verify every item has a corresponding task in a frontend phase. If not, the decomposition is incomplete — go back to Phase 4.
-4. **Dependency direction** — for every `depends_on` in the requirement, verify the task-level dependency is either preserved or explicitly marked `[DECISION]` for reversal.
-
-Show a concise summary for user approval. Keep it under 20 lines:
-
-```
-📋 Task Breakdown Summary
-─────────────────────────
-Source: [requirement doc name]
-Tech Stack: [detected or "not detected"]
-Total: [N] tasks ([M] from requirements + [K] glue tasks) across [P] phases
-Critical path: [C] tasks
-Complexity: S×[a] M×[b] L×[c]
-
-Phase 1: [Name] ([n] tasks)
-Phase 2: [Name] ([n] tasks)
-...
-
-🔧 Glue tasks added: [count] (data layer, integration, infrastructure, etc.)
-📐 Ambiguities resolved: [count] (API contracts, protocol choices, etc.)
-⚠️ Needs confirmation: [count items flagged NEEDS CONFIRMATION]
-```
-
-Then ask: "要继续生成 todolist.md 吗？你也可以要求查看详情、修改任务分组或重新生成。"
-
-If the user requests changes, apply them, revalidate dependencies, confirm, and loop back. Only proceed to file generation after explicit approval.
-
-### Phase 7: Generate todolist.md
-
-**Before writing:** If `todolist.md` already exists, create a timestamped backup and ask the user whether to overwrite, create a versioned file, or view the diff.
-
-**Output format:** Follow `references/todolist-template.md` exactly. The three sections below are required because auto-dev reads them directly:
-
-| Section | What auto-dev does with it |
-|---------|---------------------------|
-| `## 设计文档` | Uses as `{SPEC_PATH}` — the source of truth for generating Cards |
-| `## 测试命令` | Uses as `{TEST_CMD}` — runs this after every Card implementation |
-| `## 约束` | Writes into `system_prompt.md` — constraints every Card must follow |
-
-**Task description quality:** Each task's bullet-point description should contain enough engineering detail for auto-dev to generate a Card without needing to guess. This means:
-- Specific technologies and libraries to use
-- Data structures and schemas where relevant
-- API endpoints and request/response formats where relevant
-- Error handling expectations
-- Performance constraints from NFRs that apply to this task
-
-**Traceability matrix:** Append at the end, mapping every FR to its task(s). Include glue tasks in a separate section. Flag any Must/Should FR without coverage. Target: 100% coverage of Must + Should FRs.
-
-**After writing, confirm:**
-```
-✅ todolist.md generated
-   Path: [relative path]
-   Tasks: [N] ([M] requirement + [K] glue) across [P] phases
-   Coverage: [X]% of Must+Should FRs
-   Glue tasks: [list of glue task IDs and what they connect]
-
-Next step: Run `autodev: [project-name]` to start coding.
-```
-
-## Example: Glue Layer in Action
-
-Given a requirement with these features:
-- FR-001: 策略信号生成
-- FR-002: 订单管理
-- FR-003: 持仓计算
-
-A naive decomposition just creates 3 tasks. But the **glue layer analysis** reveals:
-
-```
-🔧 Glue tasks identified:
-- [GLUE] 策略-订单映射层：定义 Signal → Order 转换接口
-  SignalHandler.on_signal(signal: Signal) → List[Order]
-  Signal schema: {strategy_id, symbol, direction, quantity, order_type, price}
-
-- [GLUE] 成交回报处理管道：连接订单成交到持仓更新
-  FillHandler.on_fill(fill: Fill) → PositionUpdate
-  Event flow: Exchange → FillHandler → PositionManager.update()
-
-- [GLUE] 共享数据层：设计统一的数据库 schema
-  Tables: orders, fills, positions, strategies
-  Constraints: 所有金额字段使用 Decimal
-```
-
-These glue tasks are what makes a set of features into a working system.
+- For low-impact reversible choices, state a conservative assumption and its evidence.
+- For high-impact API, data-loss, security, compliance, migration, or public-contract choices, add a
+  blocker under `Open Decisions` instead of inventing an answer.
+- A blocker may prevent a dependent task while the rest of the task list remains usable.
+
+### 9. Write or Revise `todolist.md`
+
+Use [references/todolist-template.md](references/todolist-template.md).
+
+- Use the user-specified output path when supplied; otherwise use `<project-root>/todolist.md`.
+- When creating a new file, all task and verification checkboxes start unchecked.
+- When updating an existing file, preserve completed `[x]` state, user notes, and stable task IDs.
+- If a requirement was removed, do not silently delete a completed historical task; move it to a
+  clearly labeled superseded section or ask when deletion would lose useful history.
+- Do not require a separate approval merely to write the file when the user already asked to generate
+  or revise it.
+
+### 10. Validate the Output
+
+Verify all of the following:
+
+- every task begins with `- [ ] T-xxx:` or preserved `- [x] T-xxx:`
+- every task has at least one nested verification checkbox
+- task IDs are unique and dependencies reference existing IDs
+- the dependency graph is acyclic
+- all Must and Should requirements are covered
+- every source acceptance criterion maps to a task verification checkbox
+- glue tasks identify what they connect and why they are necessary
+- constraints and non-goals have not been converted into contradictory tasks
+- blockers and inferred assumptions are explicit
+- completed checkbox state from an existing file is preserved
+- the file contains no implementation code, hidden credential values, or provider-specific runner setup
+
+## Delivery Report
+
+After writing, report:
+
+- output path
+- total, open, and completed task counts
+- phase count, if phases were useful
+- requirement and acceptance-criterion coverage
+- glue tasks added
+- blockers and assumptions
+- areas that could not be verified from the available repository context
+
+Do not start implementing the checklist unless the user separately asks for implementation.
